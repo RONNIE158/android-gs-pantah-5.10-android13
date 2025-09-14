@@ -94,7 +94,7 @@ jobs:
     - name: Setup Bazel & build kernel
       run: |
         export PATH=$PWD/google-kernel/prebuilts/bazel/linux-x86_64:$PATH
-        cd google-kernel/private/gs-google
+        cd private/gs-google
         chmod +x build_cloudripper.sh
         ./build_cloudripper.sh
 
