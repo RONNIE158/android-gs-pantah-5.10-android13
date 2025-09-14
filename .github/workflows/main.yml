@@ -6,29 +6,31 @@ on:
 env:
   PATCH_REPO: Linux-on-droid/lindroid-drm-loopback
   KERNEL_BRANCH: android-gs-pantah-5.10-android13-qpr3
-  CLANG_VERSION: r416183b
 
 jobs:
   build:
     runs-on: ubuntu-22.04
 
     steps:
-      # 1️⃣ Checkout root repo (yang punya build_cloudripper.sh)
+
+      # 1️⃣ Checkout root repo (tempat build_cloudripper.sh)
       - name: Checkout root repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: main  # branch root repo tempat build_cloudripper.sh ada
+          ref: main  # ganti jika branch lain yang ada build_cloudripper.sh
 
-      # 2️⃣ Install dependencies
-      - name: Install dependencies
+      # 2️⃣ Install repo tool & dependencies
+      - name: Install repo tool and dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            bc bison build-essential flex lld \
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod +x ~/bin/repo
+          echo "$HOME/bin" >> $GITHUB_PATH
+          sudo apt update && sudo apt install -y \
+            git curl python3 bc bison flex build-essential \
             libssl-dev libncurses5-dev libncursesw5-dev \
-            python3 python3-pip rsync cpio zip \
-            git curl wget unzip libelf-dev dwarves \
+            lld rsync cpio zip wget unzip libelf-dev dwarves \
             device-tree-compiler
 
       # 3️⃣ Sync Google kernel
@@ -60,7 +62,7 @@ jobs:
       # 6️⃣ Build kernel pakai build_cloudripper.sh
       - name: Build Kernel
         run: |
-          ls -lah  # pastikan build_cloudripper.sh ada
+          ls -lah  # debug: pastikan build_cloudripper.sh ada
           chmod +x build_cloudripper.sh
           ./build_cloudripper.sh
         working-directory: ${{ github.workspace }}
