@@ -34,17 +34,23 @@ jobs:
         git remote add origin https://android.googlesource.com/kernel/manifest
         git config core.sparseCheckout true
 
-        # Tentukan folder yang dibutuhkan
-        cat <<EOF > .git/info/sparse-checkout
-kernel/common
-private/gs-google
-prebuilts/bazel
-kernel/configs
-tools/mkbootimg
-EOF
+        - name: Sparse Checkout Google Kernel
+          run: |
+            mkdir -p google-kernel
+            cd google-kernel
+            git init
+            git remote add origin https://android.googlesource.com/kernel/manifest
+            git config core.sparseCheckout true
 
-        git pull --depth=1 origin $KERNEL_BRANCH
-        cd ..
+            echo "kernel/common" >> .git/info/sparse-checkout
+            echo "private/gs-google" >> .git/info/sparse-checkout
+            echo "prebuilts/bazel" >> .git/info/sparse-checkout
+            echo "kernel/configs" >> .git/info/sparse-checkout
+            echo "tools/mkbootimg" >> .git/info/sparse-checkout
+
+            git pull --depth=1 origin $KERNEL_BRANCH
+            cd ..
+
 
     # 4️⃣ Checkout Lindroid DRM Patch
     - name: Checkout Lindroid DRM Patch
