@@ -14,8 +14,7 @@ jobs:
         with:
           fetch-depth: 0
        
-         # Install repo tool
-      - name: Install repo tool
+      - name: Sync Google Kernel Branch
         run: |
           sudo apt update
           sudo apt install -y curl git python3
@@ -23,16 +22,13 @@ jobs:
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
           export PATH=~/bin:$PATH
-          repo --version 
 
-      # Sync Google kernel branch
-      - name: Sync Google Kernel Branch
-        run: |
           BRANCH="android-gs-pantah-5.10-android13-qpr3"
           mkdir google-kernel
           cd google-kernel
           repo init -u https://android.googlesource.com/kernel/manifest -b $BRANCH --depth=1
           repo sync --no-tags -j$(nproc) --current-branch
+
 
       - name: Create & push import branch
         run: |
