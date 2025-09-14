@@ -28,8 +28,8 @@ jobs:
     # 3️⃣ Sparse checkout Google Kernel dan gs-google
     - name: Sparse Checkout Google Kernel
       run: |
-        mkdir -p google-kernel
-        cd google-kernel
+        mkdir -p private
+        cd private
         git init
         git remote add origin https://android.googlesource.com/kernel/manifest
         git config core.sparseCheckout true
@@ -54,18 +54,18 @@ jobs:
     # 5️⃣ Apply Lindroid DRM Patch ke kernel-common
     - name: Apply Lindroid DRM Patch
       run: |
-        mkdir -p google-kernel/kernel-common/drivers/lindroid-drm
-        cp -r drm-dkms/* google-kernel/kernel-common/drivers/lindroid-drm/
-        echo 'obj-y += lindroid-drm/' >> google-kernel/kernel-common/drivers/Makefile
-        echo 'source "drivers/lindroid-drm/Kconfig"' >> google-kernel/kernel-common/drivers/Kconfig
+        mkdir -p private/kernel-common/drivers/lindroid-drm
+        cp -r drm-dkms/* private/kernel-common/drivers/lindroid-drm/
+        echo 'obj-y += lindroid-drm/' >> private/kernel-common/drivers/Makefile
+        echo 'source "drivers/lindroid-drm/Kconfig"' >> private/kernel-common/drivers/Kconfig
 
     # 6️⃣ Clone remaining kernel repos & modules
     - name: Clone remaining kernel repos & modules
       run: |
-       cd google-kernel
+       cd private
 
        # Kernel GS spesifik
-       git clone --depth=1 -b android-gs-pantah-5.10-android13-qpr3 https://android.googlesource.com/kernel/gs private/gs-google
+       git clone --depth=1 -b android-gs-pantah-5.10-android13-qpr3 https://android.googlesource.com/kernel/gs gs-google
 
        # Build dan configs (configs pakai branch sama)
        git clone --depth=1 -b android-gs-pantah-5.10-android13-qpr3 https://android.googlesource.com/kernel/build kernel/build
