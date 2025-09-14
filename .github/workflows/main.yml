@@ -48,7 +48,7 @@ jobs:
     # 7️⃣ Clone remaining kernel repos & Google modules
     - run: |
         cd google-kernel
-        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/gs gs-google
+        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/gs-google google-kernel/gs-google
         git clone --depth=1 https://android.googlesource.com/kernel/build kernel/build
         git clone --depth=1 https://android.googlesource.com/kernel/configs kernel/configs
         git clone --depth=1 https://android.googlesource.com/platform/system/tools/mkbootimg mkbootimg
