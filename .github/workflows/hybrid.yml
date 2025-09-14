@@ -1,0 +1,98 @@
+name: Build Google Kernel + Lindroid DRM (Sparse Checkout)
+
+on:
+  workflow_dispatch:
+
+env:
+  PATCH_REPO: Linux-on-droid/lindroid-drm-loopback
+  KERNEL_BRANCH: android-gs-pantah-5.10-android13-qpr3
+  CLANG_VERSION: r416183b
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    # 1️⃣ Checkout root repo (untuk patch dan script)
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    # 2️⃣ Install dependencies
+    - run: |
+        sudo apt update
+        sudo apt install -y git bc bison build-essential flex lld \
+          libssl-dev libncurses5-dev libncursesw5-dev python3 python3-pip \
+          rsync cpio zip wget unzip libelf-dev dwarves device-tree-compiler
+
+    # 3️⃣ Sparse checkout kernel
+    - name: Sparse Checkout Google Kernel
+      run: |
+        mkdir -p google-kernel
+        cd google-kernel
+        git init
+        git remote add origin https://android.googlesource.com/kernel/manifest
+        git config core.sparseCheckout true
+
+        # Tentukan folder yang dibutuhkan
+        cat <<EOF > .git/info/sparse-checkout
+kernel/common
+private/gs-google
+prebuilts/bazel
+kernel/configs
+tools/mkbootimg
+EOF
+
+        git pull --depth=1 origin $KERNEL_BRANCH
+        cd ..
+
+    # 4️⃣ Checkout Lindroid DRM Patch
+    - name: Checkout Lindroid DRM Patch
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ env.PATCH_REPO }}
+        path: drm-dkms
+
+    # 5️⃣ Apply Lindroid DRM patch ke kernel common
+    - name: Apply Lindroid DRM Patch to Kernel Common
+      run: |
+        cd google-kernel/kernel/common
+        mkdir -p drivers/lindroid-drm
+        cp -r ../../drm-dkms/* drivers/lindroid-drm/
+        echo 'obj-y += lindroid-drm/' >> drivers/Makefile
+        echo 'source "drivers/lindroid-drm/Kconfig"' >> drivers/Kconfig
+        cd ../..
+
+    # 6️⃣ Clone Google modules yang dibutuhkan
+    - name: Clone Google Modules (Shallow)
+      run: |
+        MODULES=(aoc gpu display)
+        for mod in "${MODULES[@]}"; do
+          git clone --depth=1 https://android.googlesource.com/kernel/google-modules/$mod google-kernel/kernel/google-modules/$mod
+        done
+
+    # 7️⃣ Build kernel pakai build_cloudripper.sh
+    - name: Setup Bazel & Build Kernel
+      run: |
+        export PATH=$PWD/google-kernel/prebuilts/bazel/linux-x86_64:$PATH
+        cd google-kernel/private/gs-google
+        chmod +x build_cloudripper.sh
+        ./build_cloudripper.sh
+        cd ../..
+
+    # 8️⃣ Collect build artifacts
+    - name: Collect Build Outputs
+      run: |
+        mkdir -p artifacts
+        cp google-kernel/private/gs-google/out/arch/arm64/boot/Image.lz4 artifacts/ || true
+        cp google-kernel/private/gs-google/out/arch/arm64/boot/dts/google/*.dtb artifacts/ || true
+        cp google-kernel/private/gs-google/out/arch/arm64/boot/dts/google/*.dtbo artifacts/ || true
+        cp google-kernel/private/gs-google/out/boot.img artifacts/ || true
+        cp google-kernel/private/gs-google/out/System.map artifacts/ || true
+        cp google-kernel/private/gs-google/out/vmlinux artifacts/ || true
+
+    # 9️⃣ Upload artifacts
+    - uses: actions/upload-artifact@v4
+      with:
+        name: gki-lindroid-build
+        path: artifacts
