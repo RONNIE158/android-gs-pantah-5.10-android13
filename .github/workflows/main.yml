@@ -1,4 +1,4 @@
-name: Build Google Kernel with Lindroid DRM
+name: Build Google Kernel + Lindroid DRM
 
 on:
   workflow_dispatch:
@@ -13,84 +13,75 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Checkout Google Kernel Common
-      run: |
+    # 1️⃣ Checkout root repo (untuk patch dan build_cloudripper.sh)
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    # 2️⃣ Install dependencies
+    - run: |
+        sudo apt update
+        sudo apt install -y git bc bison build-essential flex lld \
+          libssl-dev libncurses5-dev libncursesw5-dev python3 python3-pip \
+          rsync cpio zip wget unzip libelf-dev dwarves device-tree-compiler
+
+    # 3️⃣ Clone kernel common
+    - run: |
         mkdir -p google-kernel
         cd google-kernel
         git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/common kernel-common
+        cd ..
+
+    # 4️⃣ Checkout Lindroid DRM patch
+    - uses: actions/checkout@v4
+      with:
+        repository: ${{ env.PATCH_REPO }}
+        path: drm-dkms
+
+    # 5️⃣ Apply Lindroid DRM patch ke kernel common
+    - run: |
+        cd google-kernel/kernel-common
+        mkdir -p drivers/lindroid-drm
+        cp -r ../../drm-dkms/* drivers/lindroid-drm/
+        echo 'obj-y += lindroid-drm/' >> drivers/Makefile
+        echo 'source "drivers/lindroid-drm/Kconfig"' >> drivers/Kconfig
+        cd ../..
+
+    # 6️⃣ Clone gs-google dan build tools
+    - run: |
+        cd google-kernel
         git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/gs kernel/gs-google
         git clone --depth=1 https://android.googlesource.com/kernel/build kernel/build
         git clone --depth=1 https://android.googlesource.com/kernel/configs kernel/configs
         git clone --depth=1 https://android.googlesource.com/platform/system/tools/mkbootimg mkbootimg
         cd ..
 
-    - name: Checkout Lindroid DRM Patch
-      uses: actions/checkout@v3
-      with:
-        repository: ${{ env.PATCH_REPO }}
-        path: drm-dkms
-
-    - name: Apply Lindroid DRM Patch
-      run: |
-        cp -r drm-dkms google-kernel/gs-google/drivers/lindroid-drm
-        echo 'obj-y += lindroid-drm/' >> google-kernel/gs-google/drivers/Makefile
-        echo 'source "drivers/lindroid-drm/Kconfig"' >> google-kernel/gs-google/drivers/Kconfig
-
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          bc bison build-essential flex lld \
-          libssl-dev libncurses5-dev libncursesw5-dev \
-          python3 python3-pip rsync cpio zip \
-          git curl wget unzip libelf-dev dwarves \
-          device-tree-compiler
-
-    - name: Clone Clang & Toolchains
-      run: |
+    # 7️⃣ Setup Clang & Binutils
+    - run: |
         git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 clang
         echo "${{ github.workspace }}/clang/bin" >> $GITHUB_PATH
+
         git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 aarch64-linux-android-4.9
         echo "${{ github.workspace }}/aarch64-linux-android-4.9/bin" >> $GITHUB_PATH
 
-    - name: Build Kernel with build_cloudripper.sh
-      run: |
-        cd google-kernel/gs-google
+    # 8️⃣ Build kernel
+    - run: |
         chmod +x build_cloudripper.sh
-        export PATH=$PWD/../../clang/bin:$PWD/../../aarch64-linux-android-4.9/bin:$PATH
         ./build_cloudripper.sh
 
-    - name: Build boot.img
-      run: |
-        mkdir -p artifacts
-        echo "init" | cpio -H newc -o > artifacts/ramdisk.img
-        python3 ../mkbootimg/mkbootimg.py \
-          --kernel google-kernel/gs-google/out/arch/arm64/boot/Image.lz4 \
-          --ramdisk artifacts/ramdisk.img \
-          --dtb google-kernel/gs-google/out/arch/arm64/boot/dts/google/pantah.dtb \
-          --os_version 13.0.0 \
-          --os_patch_level 2023-06-05 \
-          --header_version 4 \
-          --base 0x00000000 \
-          --pagesize 4096 \
-          --cmdline "console=ttyMSM0,115200n8 earlycon=msm_geni_serial,0xA90000" \
-          --output artifacts/boot.img
-
+    # 9️⃣ Collect artifacts
     - name: Collect Build Outputs
       run: |
         mkdir -p artifacts
-        cp google-kernel/gs-google/out/arch/arm64/boot/Image.lz4 artifacts/
+        cp google-kernel/gs-google/out/arch/arm64/boot/Image.lz4 artifacts/ || true
         cp google-kernel/gs-google/out/arch/arm64/boot/dts/google/*.dtb artifacts/ || true
         cp google-kernel/gs-google/out/arch/arm64/boot/dts/google/*.dtbo artifacts/ || true
-        if [ -d google-kernel/gs-google/out/modules ]; then
-          tar -czf artifacts/modules.tar.gz -C google-kernel/gs-google/out/modules .
-        fi
-        cp artifacts/boot.img artifacts/ || true
+        cp google-kernel/gs-google/out/boot.img artifacts/ || true
         cp google-kernel/gs-google/out/System.map artifacts/ || true
         cp google-kernel/gs-google/out/vmlinux artifacts/ || true
 
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
+    # 🔟 Upload artifacts
+    - uses: actions/upload-artifact@v4
       with:
-        name: gki-lindroid-build-full
+        name: gki-lindroid-build
         path: artifacts
