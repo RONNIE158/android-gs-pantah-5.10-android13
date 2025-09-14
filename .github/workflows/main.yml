@@ -1,39 +1,42 @@
-name: Build Google Kernel with Lindroid DRM Patch
+name: Build GKI Kernel with Lindroid DRM (Google builder)
 
 on:
   workflow_dispatch:
 
 env:
   PATCH_REPO: Linux-on-droid/lindroid-drm-loopback
+  KERNEL_BRANCH: android-gs-pantah-5.10-android13-qpr3
+  CLANG_VERSION: r416183b
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
-
-      # 1️⃣ Checkout root repo (yang punya build script)
+      # 1️⃣ Checkout root repo (yang punya build_cloudripper.sh)
       - name: Checkout root repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: main  # branch root repo tempat build_cloudripper.sh ada
 
-      # 2️⃣ Install repo tool & dependencies
-      - name: Install repo tool and dependencies
+      # 2️⃣ Install dependencies
+      - name: Install dependencies
         run: |
-          mkdir -p ~/bin
-          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-          chmod +x ~/bin/repo
-          echo "$HOME/bin" >> $GITHUB_PATH
-          sudo apt update && sudo apt install -y git curl python3 bc bison flex libssl-dev make gcc
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc bison build-essential flex lld \
+            libssl-dev libncurses5-dev libncursesw5-dev \
+            python3 python3-pip rsync cpio zip \
+            git curl wget unzip libelf-dev dwarves \
+            device-tree-compiler
 
       # 3️⃣ Sync Google kernel
       - name: Sync Google kernel branch
         run: |
-          BRANCH="android-gs-pantah-5.10-android13-qpr3"
           mkdir -p kernel
           cd kernel
-          repo init -u https://android.googlesource.com/kernel/manifest -b $BRANCH --depth=1
+          repo init -u https://android.googlesource.com/kernel/manifest -b $KERNEL_BRANCH --depth=1
           repo sync --current-branch -j$(nproc) || true
           cd ..
 
@@ -54,8 +57,31 @@ jobs:
           cp -r ../drm-dkms/* drivers/lindroid-drm
           cd ..
 
-      # 6️⃣ Build kernel dengan build_cloudripper.sh
+      # 6️⃣ Build kernel pakai build_cloudripper.sh
       - name: Build Kernel
         run: |
+          ls -lah  # pastikan build_cloudripper.sh ada
           chmod +x build_cloudripper.sh
           ./build_cloudripper.sh
+        working-directory: ${{ github.workspace }}
+
+      # 7️⃣ Collect Build Outputs
+      - name: Collect Build Outputs
+        run: |
+          mkdir -p artifacts
+          cp kernel/out/arch/arm64/boot/Image.lz4 artifacts/ || true
+          cp kernel/out/arch/arm64/boot/dts/google/*.dtb artifacts/ || true
+          cp kernel/out/arch/arm64/boot/dts/google/*.dtbo artifacts/ || true
+          if [ -d kernel/out/modules ]; then
+            tar -czf artifacts/modules.tar.gz -C kernel/out/modules .
+          fi
+          cp kernel/out/boot.img artifacts/ || true
+          cp kernel/out/System.map artifacts/ || true
+          cp kernel/out/vmlinux artifacts/ || true
+
+      # 8️⃣ Upload artifacts
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gki-lindroid-build-full
+          path: artifacts
