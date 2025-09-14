@@ -1,4 +1,4 @@
-name: Import Google Kernel Branch (Simple, No Repo Tool)
+name: Import Google Kernel Branch
 
 on:
   workflow_dispatch:
