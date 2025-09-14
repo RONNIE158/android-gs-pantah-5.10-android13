@@ -1,50 +1,55 @@
-name: Import Google Kernel Branch
+name: Update Google Kernel Branch (Repo Tool Auto Sync)
 
 on:
   workflow_dispatch:
 
 jobs:
-  import:
+  update:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout repo workflow
+      # 1️⃣ Checkout repo GitHub lo
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-       
-      - name: Sync Google Kernel Branch
+
+      # 2️⃣ Install repo tool
+      - name: Install repo tool
         run: |
           sudo apt update
           sudo apt install -y curl git python3
           mkdir -p ~/bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod a+x ~/bin/repo
-          export PATH=~/bin:$PATH
+          echo "$HOME/bin" >> $GITHUB_PATH
 
+      # 3️⃣ Sync Google kernel branch
+      - name: Sync Google Kernel Branch
+        run: |
           BRANCH="android-gs-pantah-5.10-android13-qpr3"
           mkdir google-kernel
           cd google-kernel
           repo init -u https://android.googlesource.com/kernel/manifest -b $BRANCH --depth=1
           repo sync --no-tags -j$(nproc) --current-branch
 
-
-      - name: Create & push import branch
+      # 4️⃣ Copy isi kernel ke root repo, commit & push ke branch sama
+      - name: Sync & push to GitHub branch
         run: |
-         BRANCH="android-gs-pantah-5.10-android13-qpr3"
-         # Copy isi Google kernel ke root repo, kecuali folder .repo
-         rsync -a --delete --exclude='.repo' google-kernel/ .
+          BRANCH="android-gs-pantah-5.10-android13-qpr3"
+          TARGET_BRANCH="import-$BRANCH"
 
-         # Buat branch baru
-         git checkout -b import-$BRANCH
-         git config user.name "github-actions[bot]"
-         git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Rsync aman: exclude .repo dan ignore error file vanish
+          rsync -a --delete --exclude='.repo' --ignore-errors google-kernel/ .
 
-         # Commit semua perubahan
-         git add .
-         git commit -m "Import Google kernel snapshot $BRANCH"
+          # Checkout branch target atau buat jika belum ada
+          git checkout -B $TARGET_BRANCH
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-         # Push pakai GITHUB_TOKEN
-         git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/RONNIE158/android-gs-pantah-5.10-android13-qpr3.git import-$BRANCH --force
+          # Commit perubahan, jika tidak ada perubahan jangan gagal
+          git add .
+          git commit -m "Update Google kernel snapshot $BRANCH" || echo "No changes to commit"
 
+          # Push ke GitHub
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/RONNIE158/android-gs-pantah-5.10-android13-qpr3.git $TARGET_BRANCH --force
