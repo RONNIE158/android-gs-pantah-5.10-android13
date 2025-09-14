@@ -14,14 +14,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Install repo tool
-      - name: Install repo tool
-        run: |
-          mkdir -p ~/bin
-          curl -sSL https://storage.googleapis.com/git-repo-downloads/repo -o ~/bin/repo
-          chmod +x ~/bin/repo
-          echo "$HOME/bin" >> $GITHUB_PATH
-
       # Sync Google kernel branch
       - name: Sync Google Kernel Branch
         run: |
