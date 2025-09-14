@@ -1,4 +1,4 @@
-name: Import Google Kernel Branch
+name: Import Google Kernel Branch (Simple, No Repo Tool)
 
 on:
   workflow_dispatch:
@@ -14,24 +14,30 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Sync Google kernel branch
-      - name: Sync Google Kernel Branch
+      # Clone Google kernel branch (shallow clone)
+      - name: Clone Google Kernel Branch
         run: |
           BRANCH="android-gs-pantah-5.10-android13-qpr3"
-          mkdir google-kernel
-          cd google-kernel
-          repo init -u https://android.googlesource.com/kernel/manifest -b $BRANCH --depth=1
-          repo sync --no-tags -j$(nproc) --current-branch
+          rm -rf google-kernel
+          git clone --depth=1 -b $BRANCH https://android.googlesource.com/kernel/manifest google-kernel
 
-      # Create new branch and commit in repo workflow
-      - name: Create new import branch
+      # Copy only necessary files to root repo
+      - name: Copy kernel files (optimized)
+        run: |
+          rsync -a --exclude='.git' google-kernel/ ./
+
+      # Cleanup cloned folder to free space
+      - name: Cleanup kernel folder
+        run: |
+          rm -rf google-kernel
+
+      # Commit and push to import branch
+      - name: Create & push import branch
         run: |
           BRANCH="android-gs-pantah-5.10-android13-qpr3"
           git checkout -b import-$BRANCH
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Copy all files dari google-kernel ke root repo
-          rsync -a --exclude='.git' google-kernel/ .
           git add .
           git commit -m "Import Google kernel snapshot $BRANCH"
           git push origin import-$BRANCH --force
