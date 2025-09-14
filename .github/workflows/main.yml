@@ -1,4 +1,4 @@
-name: Build GKI Kernel with Lindroid DRM (Google builder)
+name: Build GKI Kernel with Lindroid DRM
 
 on:
   workflow_dispatch:
@@ -12,78 +12,56 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y git curl python3 python3-pip bc bison build-essential flex \
+          libssl-dev libncurses5-dev libncursesw5-dev rsync cpio zip dwarves device-tree-compiler
 
-      # 1️⃣ Checkout root repo (tempat build_cloudripper.sh)
-      - name: Checkout root repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: main  # ganti jika branch lain yang ada build_cloudripper.sh
+    - name: Install repo tool
+      run: |
+        mkdir -p ~/bin
+        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+        chmod +x ~/bin/repo
+        echo "$HOME/bin" >> $GITHUB_PATH
 
-      # 2️⃣ Install repo tool & dependencies
-      - name: Install repo tool and dependencies
-        run: |
-          mkdir -p ~/bin
-          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-          chmod +x ~/bin/repo
-          echo "$HOME/bin" >> $GITHUB_PATH
-          sudo apt update && sudo apt install -y \
-            git curl python3 bc bison flex build-essential \
-            libssl-dev libncurses5-dev libncursesw5-dev \
-            lld rsync cpio zip wget unzip libelf-dev dwarves \
-            device-tree-compiler
+    - name: Repo init & sync Google kernel
+      run: |
+        mkdir -p google-kernel
+        cd google-kernel
+        repo init -u https://android.googlesource.com/kernel/manifest -b $KERNEL_BRANCH --depth=1
+        repo sync --current-branch -j$(nproc) || true
+        cd ..
 
-      # 3️⃣ Sync Google kernel
-      - name: Sync Google kernel branch
-        run: |
-          mkdir -p kernel
-          cd kernel
-          repo init -u https://android.googlesource.com/kernel/manifest -b $KERNEL_BRANCH --depth=1
-          repo sync --current-branch -j$(nproc) || true
-          cd ..
+    - name: Checkout Lindroid DRM patch
+      uses: actions/checkout@v3
+      with:
+        repository: ${{ env.PATCH_REPO }}
+        path: drm-dkms
 
-      # 4️⃣ Checkout Lindroid DRM Patch
-      - name: Checkout Lindroid DRM Patch
-        uses: actions/checkout@v3
-        with:
-          repository: ${{ env.PATCH_REPO }}
-          path: drm-dkms
+    - name: Apply Lindroid DRM patch
+      run: |
+        cd google-kernel/private/gs-google
+        mkdir -p drivers/lindroid-drm
+        echo 'obj-y += lindroid-drm/' >> drivers/Makefile
+        echo 'source "drivers/lindroid-drm/Kconfig"' >> drivers/Kconfig
+        cp -r ../../../../drm-dkms/* drivers/lindroid-drm
+        cd ../../../..
 
-      # 5️⃣ Apply Lindroid DRM Patch
-      - name: Apply Lindroid DRM Patch
-        run: |
-          cd kernel
-          mkdir -p drivers/lindroid-drm
-          echo 'obj-y += lindroid-drm/' >> drivers/Makefile
-          echo 'source "drivers/lindroid-drm/Kconfig"' >> drivers/Kconfig
-          cp -r ../drm-dkms/* drivers/lindroid-drm
-          cd ..
+    - name: Build kernel with build_cloudripper.sh
+      run: |
+        cd google-kernel/private/gs-google
+        chmod +x build_cloudripper.sh
+        ./build_cloudripper.sh
+        cd ../../../..
 
-      # 6️⃣ Build kernel pakai build_cloudripper.sh
-      - name: Build Kernel
-        run: |
-          ls -lah  # debug: pastikan build_cloudripper.sh ada
-          chmod +x build_cloudripper.sh
-          ./build_cloudripper.sh
-        working-directory: ${{ github.workspace }}
+    - name: Collect build artifacts
+      run: |
+        mkdir -p artifacts
+        cp -r google-kernel/private/gs-google/out/* artifacts/ || true
 
-      # 7️⃣ Collect Build Outputs
-      - name: Collect Build Outputs
-        run: |
-          mkdir -p artifacts
-          cp kernel/out/arch/arm64/boot/Image.lz4 artifacts/ || true
-          cp kernel/out/arch/arm64/boot/dts/google/*.dtb artifacts/ || true
-          cp kernel/out/arch/arm64/boot/dts/google/*.dtbo artifacts/ || true
-          if [ -d kernel/out/modules ]; then
-            tar -czf artifacts/modules.tar.gz -C kernel/out/modules .
-          fi
-          cp kernel/out/boot.img artifacts/ || true
-          cp kernel/out/System.map artifacts/ || true
-          cp kernel/out/vmlinux artifacts/ || true
-
-      # 8️⃣ Upload artifacts
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: gki-lindroid-build-full
-          path: artifacts
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: gki-lindroid-build-full
+        path: artifacts
