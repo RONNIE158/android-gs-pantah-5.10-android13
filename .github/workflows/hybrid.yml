@@ -53,9 +53,11 @@ jobs:
     # 5️⃣ Apply Lindroid DRM Patch to Kernel Common
     - name: Apply Lindroid DRM Patch to Kernel Common
       run: |
-        cp -r drm-dkms google-kernel/kernel-common/drivers/lindroid-drm
+        mkdir -p google-kernel/kernel-common/drivers/lindroid-drm
+        cp -r drm-dkms/* google-kernel/kernel-common/drivers/lindroid-drm/
         echo 'obj-y += lindroid-drm/' >> google-kernel/kernel-common/drivers/Makefile
         echo 'source "drivers/lindroid-drm/Kconfig"' >> google-kernel/kernel-common/drivers/Kconfig
+
 
     # 6️⃣ Clone remaining kernel repos & modules
     - name: Clone remaining kernel repos & modules
