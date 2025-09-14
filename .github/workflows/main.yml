@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    # 1️⃣ Checkout repo utama (tempat workflow ini)
+    # 1️⃣ Checkout repo utama
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
@@ -25,22 +25,31 @@ jobs:
           libssl-dev libncurses5-dev libncursesw5-dev python3 python3-pip \
           rsync cpio zip wget unzip libelf-dev dwarves device-tree-compiler
 
-    # 3️⃣ Sparse checkout Google Kernel root
-    - name: Sparse Checkout Google Kernel
+    # 3️⃣ Clone kernel repos
+    - name: Clone Google Kernel repos
       run: |
         mkdir -p google-kernel
         cd google-kernel
-        git init
-        git remote add origin https://android.googlesource.com/kernel/manifest
-        git config core.sparseCheckout true
 
-        echo "kernel/common" > .git/info/sparse-checkout
-        echo "private/gs-google" >> .git/info/sparse-checkout
-        echo "prebuilts/bazel" >> .git/info/sparse-checkout
-        echo "kernel/configs" >> .git/info/sparse-checkout
-        echo "tools/mkbootimg" >> .git/info/sparse-checkout
+        # Kernel GS (private tree)
+        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/gs private/gs-google
 
-        git pull --depth=1 origin $KERNEL_BRANCH
+        # Build & configs
+        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/build kernel/build
+        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/configs kernel/configs
+
+        # Common kernel
+        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/common common
+
+        # Mkbootimg
+        git clone --depth=1 https://android.googlesource.com/platform/system/tools/mkbootimg tools/mkbootimg
+
+        # Bazel
+        git clone --depth=1 https://android.googlesource.com/kernel/prebuilts/bazel prebuilts/bazel
+
+        # Dummy boot-artifacts
+        mkdir -p prebuilts/boot-artifacts/kernel
+
         cd ..
 
     # 4️⃣ Checkout Lindroid DRM Patch
@@ -50,33 +59,18 @@ jobs:
         repository: ${{ env.PATCH_REPO }}
         path: drm-dkms
 
-    # 5️⃣ Apply Lindroid DRM Patch ke kernel-common
+    # 5️⃣ Apply Lindroid DRM Patch
     - name: Apply Lindroid DRM Patch
       run: |
-        mkdir -p google-kernel/kernel/common/drivers/lindroid-drm
-        cp -r drm-dkms/* google-kernel/kernel/common/drivers/lindroid-drm/
-        echo 'obj-y += lindroid-drm/' >> google-kernel/kernel/common/drivers/Makefile
-        echo 'source "drivers/lindroid-drm/Kconfig"' >> google-kernel/kernel/common/drivers/Kconfig
+        mkdir -p google-kernel/common/drivers/lindroid-drm
+        cp -r drm-dkms/* google-kernel/common/drivers/lindroid-drm/
+        echo 'obj-y += lindroid-drm/' >> google-kernel/common/drivers/Makefile
+        echo 'source "drivers/lindroid-drm/Kconfig"' >> google-kernel/common/drivers/Kconfig
 
-    # 6️⃣ Clone remaining kernel repos & modules
-    - name: Clone remaining kernel repos & modules
+    # 6️⃣ Clone Google modules
+    - name: Clone Google Modules
       run: |
         cd google-kernel
-
-        # Kernel GS spesifik
-        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/gs private/gs-google
-
-        # Build & configs
-        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/build kernel/build
-        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/configs kernel/configs
-
-        # Mkbootimg
-        git clone --depth=1 https://android.googlesource.com/platform/system/tools/mkbootimg tools/mkbootimg
-
-        # Boot artifacts (❗wajib)
-        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/prebuilts/boot-artifacts prebuilts/boot-artifacts
-
-        # Google modules
         MODULES=(aoc aoc-ipc display gpu gxp/gs201 edgetpu/abrolhos edgetpu/janeiro
                  power/reset amplifiers bluetooth/synaptics bluetooth/broadcom bluetooth/qcom
                  bms fingerprint/fpc fingerprint/goodix touch/himax_touch lwis misc
@@ -86,19 +80,19 @@ jobs:
                  wlan/qcom/wcn6740/wlan video/gchips)
 
         for mod in "${MODULES[@]}"; do
-            git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/google-modules/$mod kernel/google-modules/$mod \
-              || git clone --depth=1 https://android.googlesource.com/kernel/google-modules/$mod kernel/google-modules/$mod
+          git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/google-modules/$mod kernel/google-modules/$mod \
+            || git clone --depth=1 https://android.googlesource.com/kernel/google-modules/$mod kernel/google-modules/$mod
         done
 
         cd ..
 
-    # 7️⃣ Setup Bazel & build kernel
-    - name: Setup Bazel & build kernel
+    # 7️⃣ Build kernel (Kleaf)
+    - name: Setup Bazel & Build Cloudripper
       run: |
         export PATH=$PWD/google-kernel/prebuilts/bazel/linux-x86_64:$PATH
         cd google-kernel/private/gs-google
         chmod +x build_cloudripper.sh
-        ./build_cloudripper.sh 
+        ./build_cloudripper.sh || (echo "⚠️ build_cloudripper.sh failed, coba fallback ke gki_defconfig"; exit 1)
 
     # 8️⃣ Collect artifacts
     - name: Collect Build Outputs
