@@ -33,11 +33,18 @@ jobs:
       - name: Create & push import branch
         run: |
          BRANCH="android-gs-pantah-5.10-android13-qpr3"
-         rsync -a --delete google-kernel/ .
+         # Copy isi Google kernel ke root repo, kecuali folder .repo
+         rsync -a --delete --exclude='.repo' google-kernel/ .
+
+         # Buat branch baru
          git checkout -b import-$BRANCH
          git config user.name "github-actions[bot]"
          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+         # Commit semua perubahan
          git add .
          git commit -m "Import Google kernel snapshot $BRANCH"
+
+         # Push pakai GITHUB_TOKEN
          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/RONNIE158/android-gs-pantah-5.10-android13-qpr3.git import-$BRANCH --force
 
