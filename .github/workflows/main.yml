@@ -1,43 +1,61 @@
-name: Sync Google Kernel
+name: Build Google Kernel with Lindroid DRM Patch
 
 on:
   workflow_dispatch:
 
+env:
+  PATCH_REPO: Linux-on-droid/lindroid-drm-loopback
+
 jobs:
-  sync:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repo GitHub
-      - uses: actions/checkout@v4
+
+      # 1️⃣ Checkout root repo (yang punya build script)
+      - name: Checkout root repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ Install repo tool
-      - run: |
-          sudo apt update
-          sudo apt install -y curl git python3
+      # 2️⃣ Install repo tool & dependencies
+      - name: Install repo tool and dependencies
+        run: |
           mkdir -p ~/bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod +x ~/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
+          sudo apt update && sudo apt install -y git curl python3 bc bison flex libssl-dev make gcc
 
-      # 3️⃣ Sync Google kernel branch
-      - run: |
+      # 3️⃣ Sync Google kernel
+      - name: Sync Google kernel branch
+        run: |
           BRANCH="android-gs-pantah-5.10-android13-qpr3"
-          mkdir -p google-kernel
-          cd google-kernel
+          mkdir -p kernel
+          cd kernel
           repo init -u https://android.googlesource.com/kernel/manifest -b $BRANCH --depth=1
           repo sync --current-branch -j$(nproc) || true
           cd ..
 
-      # 4️⃣ Copy kernel ke repo root, exclude .repo & .git, commit & push
-      - run: |
-          rsync -a --exclude='.repo' --exclude='*/.git' google-kernel/ ./
+      # 4️⃣ Checkout Lindroid DRM Patch
+      - name: Checkout Lindroid DRM Patch
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ env.PATCH_REPO }}
+          path: drm-dkms
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      # 5️⃣ Apply Lindroid DRM Patch
+      - name: Apply Lindroid DRM Patch
+        run: |
+          cd kernel
+          mkdir -p drivers/lindroid-drm
+          echo 'obj-y += lindroid-drm/' >> drivers/Makefile
+          echo 'source "drivers/lindroid-drm/Kconfig"' >> drivers/Kconfig
+          cp -r ../drm-dkms/* drivers/lindroid-drm
+          cd ..
 
-          git add .
-          git commit -m "Update Google kernel $BRANCH" || echo "No changes to commit"
-          git push origin HEAD
+      # 6️⃣ Build kernel dengan build_cloudripper.sh
+      - name: Build Kernel
+        run: |
+          chmod +x build_cloudripper.sh
+          ./build_cloudripper.sh
