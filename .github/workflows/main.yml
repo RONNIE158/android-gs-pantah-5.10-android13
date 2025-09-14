@@ -1,4 +1,4 @@
-name: Sync Google Kernel to GitHub
+name: Sync Google Kernel Simplest
 
 on:
   workflow_dispatch:
@@ -8,12 +8,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repo tujuan
+      # Checkout repo
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ Install repo tool
+      # Install repo tool
       - run: |
           sudo apt update
           sudo apt install -y curl git python3
@@ -22,7 +22,7 @@ jobs:
           chmod +x ~/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
 
-      # 3️⃣ Sync Google kernel branch
+      # Sync Google kernel
       - run: |
           BRANCH="android-gs-pantah-5.10-android13-qpr3"
           mkdir -p google-kernel
@@ -31,15 +31,13 @@ jobs:
           repo sync --current-branch -j$(nproc) || true
           cd ..
 
-      # 4️⃣ Commit & push ke GitHub (exclude .repo)
+      # Copy kernel langsung, commit & push
       - run: |
-          TARGET_BRANCH="import-$BRANCH"
-          git checkout -B $TARGET_BRANCH
+          rsync -a --exclude='.repo' google-kernel/ ./
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          rsync -a --delete --exclude='.repo' google-kernel/ ./
-
           git add .
           git commit -m "Update Google kernel $BRANCH" || echo "No changes to commit"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/RONNIE158/android-gs-pantah-5.10-android13.git $TARGET_BRANCH --force
+          git push origin HEAD
