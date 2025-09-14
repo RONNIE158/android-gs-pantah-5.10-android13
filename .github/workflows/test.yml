@@ -1,0 +1,97 @@
+name: Build Google Kernel + Lindroid DRM jelas
+
+on:
+  workflow_dispatch:
+
+env:
+  PATCH_REPO: Linux-on-droid/lindroid-drm-loopback
+  KERNEL_BRANCH: android-gs-pantah-5.10-android13-qpr3
+  CLANG_VERSION: r416183b
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+
+    # ─── 1️⃣ Checkout repository ──────────────────────────────
+    - name: Checkout Root Repo
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    # ─── 2️⃣ Install dependencies ─────────────────────────────
+    - name: Install Build Dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y git bc bison build-essential flex lld \
+          libssl-dev libncurses5-dev libncursesw5-dev python3 python3-pip \
+          rsync cpio zip wget unzip libelf-dev dwarves device-tree-compiler
+
+    # ─── 3️⃣ Clone Kernel Common ─────────────────────────────
+    - name: Clone Kernel Common
+      run: |
+        mkdir -p google-kernel
+        cd google-kernel
+        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/common kernel-common
+        cd ..
+
+    # ─── 4️⃣ Checkout Lindroid DRM Patch ─────────────────────
+    - name: Checkout Lindroid DRM Patch
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ env.PATCH_REPO }}
+        path: drm-dkms
+
+    # ─── 5️⃣ Apply Lindroid DRM Patch ────────────────────────
+    - name: Apply Lindroid DRM Patch to Kernel Common
+      run: |
+        cd google-kernel/kernel-common
+        mkdir -p drivers/lindroid-drm
+        cp -r ../../drm-dkms/* drivers/lindroid-drm/
+        echo 'obj-y += lindroid-drm/' >> drivers/Makefile
+        echo 'source "drivers/lindroid-drm/Kconfig"' >> drivers/Kconfig
+        cd ../..
+
+    # ─── 6️⃣ Clone gs-google dan Build Tools ─────────────────
+    - name: Clone GS-Google and Build Tools
+      run: |
+        cd google-kernel
+        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/gs kernel/gs-google
+        git clone --depth=1 https://android.googlesource.com/kernel/build kernel/build
+        git clone --depth=1 https://android.googlesource.com/kernel/configs kernel/configs
+        git clone --depth=1 https://android.googlesource.com/platform/system/tools/mkbootimg mkbootimg
+        cd ..
+
+    # ─── 7️⃣ Setup Compiler & Toolchain ──────────────────────
+    - name: Setup Clang and Binutils
+      run: |
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 clang
+        echo "${{ github.workspace }}/clang/bin" >> $GITHUB_PATH
+
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 aarch64-linux-android-4.9
+        echo "${{ github.workspace }}/aarch64-linux-android-4.9/bin" >> $GITHUB_PATH
+
+    # ─── 8️⃣ Build Kernel ────────────────────────────────────
+    - name: Build Kernel
+      run: |
+        chmod +x build_cloudripper.sh
+        ./build_cloudripper.sh
+
+    # ─── 9️⃣ Collect Build Artifacts ────────────────────────
+    - name: Collect Artifacts
+      run: |
+        mkdir -p artifacts
+        cp google-kernel/gs-google/out/arch/arm64/boot/Image.lz4 artifacts/ || true
+        cp google-kernel/gs-google/out/arch/arm64/boot/dts/google/*.dtb artifacts/ || true
+        cp google-kernel/gs-google/out/arch/arm64/boot/dts/google/*.dtbo artifacts/ || true
+        cp google-kernel/gs-google/out/boot.img artifacts/ || true
+        cp google-kernel/gs-google/out/System.map artifacts/ || true
+        cp google-kernel/gs-google/out/vmlinux artifacts/ || true
+
+    # ─── 🔟 Upload Artifacts ─────────────────────────────────
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: gki-lindroid-build
+        path: artifacts
