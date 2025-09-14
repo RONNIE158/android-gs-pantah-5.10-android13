@@ -8,29 +8,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repo default branch
-      - uses: actions/checkout@v4
+
+      # 1️⃣ Checkout repository
+      - name: Checkout repo default branch
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       # 2️⃣ Install repo tool
-      - run: |
+      - name: Install repo tool
+        run: |
           mkdir -p ~/bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod +x ~/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
 
       # 3️⃣ Sync Google kernel
-      - run: |
+      - name: Repo sync Google kernel
+        run: |
           BRANCH="android-gs-pantah-5.10-android13-qpr3"
           repo init -u https://android.googlesource.com/kernel/manifest -b $BRANCH --depth=1
           repo sync --current-branch -j$(nproc) || true
 
-          # Hapus folder .repo dan submodule .git
+      # 4️⃣ Hapus folder .repo dan submodule .git
+      - name: Remove .repo and submodule .git
+        run: |
           find . -name ".repo" -type d -exec rm -rf {} +
           find . -name ".git" -type d -exec rm -rf {} +
 
-          # Commit & push ke default branch
+      # 5️⃣ Commit & push ke default branch
+      - name: Commit and push
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
