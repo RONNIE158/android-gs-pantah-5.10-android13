@@ -27,20 +27,30 @@ jobs:
       - name: Repo sync Google kernel
         run: |
           BRANCH="android-gs-pantah-5.10-android13-qpr3"
+          mkdir -p google-kernel
+          cd google-kernel
           repo init -u https://android.googlesource.com/kernel/manifest -b $BRANCH --depth=1
           repo sync --current-branch -j$(nproc) || true
+          cd ..
 
-      # 4️⃣ Hapus folder .repo dan submodule .git
-      - name: Remove .repo and submodule .git
+      # 4️⃣ Hapus folder .repo dan submodule .git internal
+      - name: Remove .repo and submodule .git (safe)
         run: |
-          find . -name ".repo" -type d -exec rm -rf {} +
-          find . -name ".git" -type d -exec rm -rf {} +
+          # Hapus semua folder .repo
+          find google-kernel -name ".repo" -type d -exec rm -rf {} +
 
-      # 5️⃣ Commit & push ke default branch
+          # Hapus .git hanya di submodule internal
+          find google-kernel -name ".git" -type d -exec rm -rf {} +
+
+      # 5️⃣ Commit & push ke branch default
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Copy kernel ke root repo
+          rsync -a google-kernel/ ./
+
           git add .
           git commit -m "Update Google kernel $BRANCH" || echo "No changes to commit"
           git push origin HEAD
