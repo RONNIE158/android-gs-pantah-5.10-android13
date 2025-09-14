@@ -1,0 +1,45 @@
+name: Import Google Kernel Branch
+
+on:
+  workflow_dispatch:
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install repo tool
+        run: |
+          mkdir -p ~/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Sync Google Kernel Branch
+        run: |
+         BRANCH="android-gs-pantah-5.10-android13-qpr3"
+         mkdir google-kernel
+         cd google-kernel
+         repo init -u https://android.googlesource.com/kernel/manifest -b $BRANCH --depth=1
+         repo sync --no-tags -j$(nproc) --current-branch
+
+
+
+
+      - name: Create new branch for import
+        run: |
+         BRANCH="android-gs-pantah-5.10-android13-qpr3"
+         cd google-kernel
+         git init
+         git checkout -b import-google-kernel
+         git config user.name "github-actions[bot]"
+         git config user.email "github-actions[bot]@users.noreply.github.com"
+         git add .
+         git commit -m "Import Google kernel snapshot $BRANCH"
+         git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/RONNIE158/google-pantah-kernel.git
+         git push origin import-google-kernel --force
+
