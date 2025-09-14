@@ -73,6 +73,9 @@ jobs:
         # Mkbootimg
         git clone --depth=1 https://android.googlesource.com/platform/system/tools/mkbootimg tools/mkbootimg
 
+        # Boot artifacts (❗wajib)
+        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/prebuilts/boot-artifacts prebuilts/boot-artifacts
+
         # Google modules
         MODULES=(aoc aoc-ipc display gpu gxp/gs201 edgetpu/abrolhos edgetpu/janeiro
                  power/reset amplifiers bluetooth/synaptics bluetooth/broadcom bluetooth/qcom
