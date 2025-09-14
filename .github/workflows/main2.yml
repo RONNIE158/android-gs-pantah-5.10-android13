@@ -1,4 +1,4 @@
-name: Sync Google Kernel to Default Branch
+name: Sync Google Kernel
 
 on:
   workflow_dispatch:
@@ -15,8 +15,6 @@ jobs:
 
       # 2️⃣ Install repo tool
       - run: |
-          sudo apt update
-          sudo apt install -y curl git python3
           mkdir -p ~/bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
           chmod +x ~/bin/repo
@@ -25,22 +23,16 @@ jobs:
       # 3️⃣ Sync Google kernel
       - run: |
           BRANCH="android-gs-pantah-5.10-android13-qpr3"
-          mkdir -p google-kernel
-          cd google-kernel
           repo init -u https://android.googlesource.com/kernel/manifest -b $BRANCH --depth=1
           repo sync --current-branch -j$(nproc) || true
-          cd ..
 
-      - name: Copy kernel to root, exclude .repo & .git
-        run: |
-          rsync -a --exclude='.repo' --exclude='*/.git' google-kernel/ ./
+          # Hapus folder .repo dan submodule .git
+          find . -name ".repo" -type d -exec rm -rf {} +
+          find . -name ".git" -type d -exec rm -rf {} +
 
-      - name: Commit & push
-        run: |
+          # Commit & push ke default branch
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
           git add .
           git commit -m "Update Google kernel $BRANCH" || echo "No changes to commit"
           git push origin HEAD
-
