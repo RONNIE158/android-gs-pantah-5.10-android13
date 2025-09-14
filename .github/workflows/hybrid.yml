@@ -25,7 +25,7 @@ jobs:
           libssl-dev libncurses5-dev libncursesw5-dev python3 python3-pip \
           rsync cpio zip wget unzip libelf-dev dwarves device-tree-compiler
 
-    # 3️⃣ Sparse Checkout Google Kernel
+    # 3️⃣ Sparse checkout Google Kernel dan gs-google
     - name: Sparse Checkout Google Kernel
       run: |
         mkdir -p google-kernel
@@ -34,6 +34,7 @@ jobs:
         git remote add origin https://android.googlesource.com/kernel/manifest
         git config core.sparseCheckout true
 
+        # Tentukan folder yang dibutuhkan baris per baris
         echo "kernel/common" > .git/info/sparse-checkout
         echo "private/gs-google" >> .git/info/sparse-checkout
         echo "prebuilts/bazel" >> .git/info/sparse-checkout
@@ -50,14 +51,13 @@ jobs:
         repository: ${{ env.PATCH_REPO }}
         path: drm-dkms
 
-    # 5️⃣ Apply Lindroid DRM Patch to Kernel Common
-    - name: Apply Lindroid DRM Patch to Kernel Common
+    # 5️⃣ Apply Lindroid DRM Patch ke kernel-common
+    - name: Apply Lindroid DRM Patch
       run: |
         mkdir -p google-kernel/kernel-common/drivers/lindroid-drm
         cp -r drm-dkms/* google-kernel/kernel-common/drivers/lindroid-drm/
         echo 'obj-y += lindroid-drm/' >> google-kernel/kernel-common/drivers/Makefile
         echo 'source "drivers/lindroid-drm/Kconfig"' >> google-kernel/kernel-common/drivers/Kconfig
-
 
     # 6️⃣ Clone remaining kernel repos & modules
     - name: Clone remaining kernel repos & modules
