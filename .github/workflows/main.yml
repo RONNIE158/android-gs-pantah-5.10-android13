@@ -1,14 +1,14 @@
-name: Update Google Kernel Branch (Repo Tool Auto Sync)
+name: Sync Google Kernel Simple
 
 on:
   workflow_dispatch:
 
 jobs:
-  update:
+  sync:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout repo GitHub lo
+      # 1️⃣ Checkout repo GitHub
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -21,35 +21,29 @@ jobs:
           sudo apt install -y curl git python3
           mkdir -p ~/bin
           curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-          chmod a+x ~/bin/repo
+          chmod +x ~/bin/repo
           echo "$HOME/bin" >> $GITHUB_PATH
 
       # 3️⃣ Sync Google kernel branch
-      - name: Sync Google Kernel Branch
+      - name: Repo sync
         run: |
           BRANCH="android-gs-pantah-5.10-android13-qpr3"
-          mkdir google-kernel
+          mkdir -p google-kernel
           cd google-kernel
           repo init -u https://android.googlesource.com/kernel/manifest -b $BRANCH --depth=1
-          repo sync --no-tags -j$(nproc) --current-branch
+          repo sync --current-branch -j$(nproc) || true
+          cd ..
 
-      # 4️⃣ Copy isi kernel ke root repo, commit & push ke branch sama
-      - name: Sync & push to GitHub branch
+      # 4️⃣ Copy semua file ke repo root & push
+      - name: Push to GitHub
         run: |
-          BRANCH="android-gs-pantah-5.10-android13-qpr3"
           TARGET_BRANCH="import-$BRANCH"
+          rsync -a --delete google-kernel/ ./
 
-          # Rsync aman: exclude .repo dan ignore error file vanish
-          rsync -a --delete --exclude='.repo' --ignore-errors google-kernel/ .
-
-          # Checkout branch target atau buat jika belum ada
           git checkout -B $TARGET_BRANCH
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Commit perubahan, jika tidak ada perubahan jangan gagal
           git add .
-          git commit -m "Update Google kernel snapshot $BRANCH" || echo "No changes to commit"
-
-          # Push ke GitHub
+          git commit -m "Update Google kernel $BRANCH" || echo "No changes to commit"
           git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/RONNIE158/android-gs-pantah-5.10-android13-qpr3.git $TARGET_BRANCH --force
