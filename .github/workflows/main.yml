@@ -95,14 +95,21 @@ jobs:
 
         cd ..
 
-    # 7️⃣ Build kernel (Kleaf)
-    - name: Setup Bazel & Build Cloudripper
+    # 7️⃣ Setup Bazel & build kernel (fallback ke gki_defconfig kalau Kleaf gagal)
+    - name: Build Kernel
       run: |
-        export PATH=$PWD/google-kernel/prebuilts/bazel/linux-x86_64:$PATH
+        set -e
         cd google-kernel/private/gs-google
-        chmod +x build_cloudripper.sh
-        ./build_cloudripper.sh || (echo "⚠️ build_cloudripper.sh failed, coba fallback ke gki_defconfig"; exit 1)
 
+        echo "🚀 Coba build pakai build_cloudripper.sh..."
+        if ./build_cloudripper.sh; then
+            echo "✅ build_cloudripper.sh sukses"
+        else
+            echo "⚠️ build_cloudripper.sh gagal, fallback ke gki_defconfig"
+            export PATH=/usr/lib/llvm-14/bin:$PATH
+            make ARCH=arm64 gki_defconfig
+            make -j$(nproc) ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- Image.lz4 dtbo.img
+        fi
     # 8️⃣ Collect artifacts
     - name: Collect Build Outputs
       run: |
