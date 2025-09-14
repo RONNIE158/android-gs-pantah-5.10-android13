@@ -62,24 +62,33 @@ jobs:
     # 6️⃣ Clone remaining kernel repos & modules
     - name: Clone remaining kernel repos & modules
       run: |
-        cd google-kernel
-        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/gs-google google-kernel/gs-google
-        git clone --depth=1 https://android.googlesource.com/kernel/build kernel/build
-        git clone --depth=1 https://android.googlesource.com/kernel/configs kernel/configs
-        git clone --depth=1 https://android.googlesource.com/platform/system/tools/mkbootimg mkbootimg
+       cd google-kernel
 
-        # Clone Google modules
-        MODULES=(aoc aoc-ipc display gpu gxp/gs201 edgetpu/abrolhos edgetpu/janeiro
-                 power/reset amplifiers bluetooth/synaptics bluetooth/broadcom bluetooth/qcom
-                 bms fingerprint/fpc fingerprint/goodix touch/himax_touch lwis misc
-                 sensors/hall_sensor touch/common touch/goodix_touch touch/focaltech_touch
-                 touch/fts_touch touch/novatek_touch touch/sec_touch touch/synaptics_touch
-                 uwb uwb-diags nfc wlan/bcmdhd/bcm4389 wlan/wlan_ptracker wlan/qcom/wcn6740/cnss2
-                 wlan/qcom/wcn6740/wlan video/gchips)
-        for mod in "${MODULES[@]}"; do
-          git clone --depth=1 https://android.googlesource.com/kernel/google-modules/$mod kernel/google-modules/$mod
-        done
-        cd ..
+       # Kernel GS spesifik
+       git clone --depth=1 -b android-gs-pantah-5.10-android13-qpr3 https://android.googlesource.com/kernel/gs gs-google
+
+       # Build dan configs (configs pakai branch sama)
+       git clone --depth=1 -b android-gs-pantah-5.10-android13-qpr3 https://android.googlesource.com/kernel/build kernel/build
+       git clone --depth=1 -b android-gs-pantah-5.10-android13-qpr3 https://android.googlesource.com/kernel/configs kernel/configs
+
+       # Mkbootimg
+       git clone --depth=1 https://android.googlesource.com/platform/system/tools/mkbootimg mkbootimg
+
+       # Google modules
+       MODULES=(aoc aoc-ipc display gpu gxp/gs201 edgetpu/abrolhos edgetpu/janeiro
+                power/reset amplifiers bluetooth/synaptics bluetooth/broadcom bluetooth/qcom
+                bms fingerprint/fpc fingerprint/goodix touch/himax_touch lwis misc
+                sensors/hall_sensor touch/common touch/goodix_touch touch/focaltech_touch
+                touch/fts_touch touch/novatek_touch touch/sec_touch touch/synaptics_touch
+                uwb uwb-diags nfc wlan/bcmdhd/bcm4389 wlan/wlan_ptracker wlan/qcom/wcn6740/cnss2
+                wlan/qcom/wcn6740/wlan video/gchips)
+
+       for mod in "${MODULES[@]}"; do
+           git clone --depth=1 -b android-gs-pantah-5.10-android13-qpr3 https://android.googlesource.com/kernel/google-modules/$mod kernel/google-modules/$mod || git clone --depth=1 https://android.googlesource.com/kernel/google-modules/$mod kernel/google-modules/$mod
+       done
+
+       cd ..
+
 
     # 7️⃣ Setup Bazel & build kernel
     - name: Setup Bazel & build kernel
