@@ -94,8 +94,8 @@ jobs:
       run: |
         export PATH=$PWD/google-kernel/prebuilts/bazel/linux-x86_64:$PATH
         cd google-kernel/private/gs-google
-        chmod +x build_cloudripper.sh
-        ./build_cloudripper.sh
+        chmod +x build_slider.sh
+        ./build_slider.sh
 
     # 8️⃣ Collect artifacts
     - name: Collect Build Outputs
