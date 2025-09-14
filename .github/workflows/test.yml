@@ -1,4 +1,4 @@
-name: Build Google Kernel + Lindroid DRM
+name: Build Google Kernel + Lindroid DRM (Shallow)
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    # 1️⃣ Checkout root repo (untuk patch)
+    # 1️⃣ Checkout root repo (untuk patch dan build scripts)
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
@@ -23,7 +23,7 @@ jobs:
         sudo apt update
         sudo apt install -y git bc bison build-essential flex lld \
           libssl-dev libncurses5-dev libncursesw5-dev python3 python3-pip \
-          rsync cpio zip wget unzip libelf-dev dwarves device-tree-compiler repo
+          rsync cpio zip wget unzip libelf-dev dwarves device-tree-compiler
 
     # 3️⃣ Checkout Lindroid DRM patch
     - name: Checkout Lindroid DRM Patch
@@ -31,18 +31,36 @@ jobs:
       with:
         repository: ${{ env.PATCH_REPO }}
         path: drm-dkms
+        fetch-depth: 1
 
-    # 4️⃣ Init & Sync kernel manifest
-    - name: Init & Sync Google Kernel manifest
+    # 4️⃣ Create google-kernel folder
+    - run: mkdir -p google-kernel
+
+    # 5️⃣ Shallow clone kernel repos
+    - name: Clone kernel repos & modules
       run: |
-        mkdir -p google-kernel
         cd google-kernel
-        repo init -u https://android.googlesource.com/kernel/manifest -b $KERNEL_BRANCH
-        repo sync -j4
+        # Kernel common (apply DRM patch)
+        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/common kernel-common
+        
+        # Kernel GS
+        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/gs gs-google
+        
+        # Kernel build, configs, mkbootimg
+        git clone --depth=1 https://android.googlesource.com/kernel/build kernel/build
+        git clone --depth=1 https://android.googlesource.com/kernel/configs kernel/configs
+        git clone --depth=1 https://android.googlesource.com/platform/system/tools/mkbootimg mkbootimg
+
+        # Clone only essential Google modules (shallow)
+        MODULES=(aoc display gpu gxp/gs201 edgetpu/abrolhos power/reset bluetooth/qcom
+                 fingerprint/fpc touch/himax_touch lwis nfc video/gchips)
+        for mod in "${MODULES[@]}"; do
+          git clone --depth=1 https://android.googlesource.com/kernel/google-modules/$mod kernel/google-modules/$mod
+        done
         cd ..
 
-    # 5️⃣ Apply Lindroid DRM patch to kernel common
-    - name: Apply Lindroid DRM Patch to Kernel Common
+    # 6️⃣ Apply Lindroid DRM patch to kernel common
+    - name: Apply Lindroid DRM Patch to kernel common
       run: |
         cd google-kernel/kernel-common
         mkdir -p drivers/lindroid-drm
@@ -51,7 +69,7 @@ jobs:
         echo 'source "drivers/lindroid-drm/Kconfig"' >> drivers/Kconfig
         cd ../..
 
-    # 6️⃣ Setup Bazel & build kernel
+    # 7️⃣ Setup Bazel & build kernel
     - name: Setup Bazel & Build Kernel
       run: |
         export PATH=$PWD/google-kernel/prebuilts/bazel/linux-x86_64:$PATH
@@ -59,7 +77,7 @@ jobs:
         chmod +x build_cloudripper.sh
         ./build_cloudripper.sh
 
-    # 7️⃣ Collect build artifacts
+    # 8️⃣ Collect artifacts
     - name: Collect Build Outputs
       run: |
         mkdir -p artifacts
@@ -70,7 +88,7 @@ jobs:
         cp google-kernel/gs-google/out/System.map artifacts/ || true
         cp google-kernel/gs-google/out/vmlinux artifacts/ || true
 
-    # 8️⃣ Upload artifacts
+    # 9️⃣ Upload artifacts
     - uses: actions/upload-artifact@v4
       with:
         name: gki-lindroid-build
