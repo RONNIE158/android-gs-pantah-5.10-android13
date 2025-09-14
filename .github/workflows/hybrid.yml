@@ -95,6 +95,7 @@ jobs:
       run: |
         export PATH=$PWD/private/prebuilts/bazel/linux-x86_64:$PATH
         cd private/gs-google
+        ln -s ../gs-google/build_slider.sh build_slider.sh
         chmod +x build_cloudripper.sh
         ./build_cloudripper.sh
 
