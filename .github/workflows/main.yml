@@ -1,4 +1,4 @@
-name: Build Google Kernel + Lindroid DRM
+name: Build Google Kernel + Lindroid DRM private fix
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    # 1️⃣ Checkout root repo (untuk patch dan build_cloudripper.sh)
+    # 1️⃣ Checkout repo utama (tempat workflow ini)
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
@@ -25,34 +25,55 @@ jobs:
           libssl-dev libncurses5-dev libncursesw5-dev python3 python3-pip \
           rsync cpio zip wget unzip libelf-dev dwarves device-tree-compiler
 
-    # 3️⃣ Create kernel directory
-    - run: mkdir -p google-kernel
+    # 3️⃣ Sparse checkout Google Kernel root
+    - name: Sparse Checkout Google Kernel
+      run: |
+        mkdir -p google-kernel
+        cd google-kernel
+        git init
+        git remote add origin https://android.googlesource.com/kernel/manifest
+        git config core.sparseCheckout true
 
-    # 4️⃣ Clone kernel common
-    - run: git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/common google-kernel/kernel-common
+        echo "kernel/common" > .git/info/sparse-checkout
+        echo "private/gs-google" >> .git/info/sparse-checkout
+        echo "prebuilts/bazel" >> .git/info/sparse-checkout
+        echo "kernel/configs" >> .git/info/sparse-checkout
+        echo "tools/mkbootimg" >> .git/info/sparse-checkout
 
-    # 5️⃣ Checkout Lindroid DRM Patch
+        git pull --depth=1 origin $KERNEL_BRANCH
+        cd ..
+
+    # 4️⃣ Checkout Lindroid DRM Patch
     - name: Checkout Lindroid DRM Patch
       uses: actions/checkout@v4
       with:
         repository: ${{ env.PATCH_REPO }}
         path: drm-dkms
 
-    # 6️⃣ Apply Lindroid DRM patch to kernel common
-    - run: |
-        mkdir -p google-kernel/kernel-common/drivers/lindroid-drm
-        cp -r drm-dkms/* google-kernel/kernel-common/drivers/lindroid-drm/
-        echo 'obj-y += lindroid-drm/' >> google-kernel/kernel-common/drivers/Makefile
-        echo 'source "drivers/lindroid-drm/Kconfig"' >> google-kernel/kernel-common/drivers/Kconfig
+    # 5️⃣ Apply Lindroid DRM Patch ke kernel-common
+    - name: Apply Lindroid DRM Patch
+      run: |
+        mkdir -p google-kernel/kernel/common/drivers/lindroid-drm
+        cp -r drm-dkms/* google-kernel/kernel/common/drivers/lindroid-drm/
+        echo 'obj-y += lindroid-drm/' >> google-kernel/kernel/common/drivers/Makefile
+        echo 'source "drivers/lindroid-drm/Kconfig"' >> google-kernel/kernel/common/drivers/Kconfig
 
-    # 7️⃣ Clone remaining kernel repos & Google modules
-    - run: |
+    # 6️⃣ Clone remaining kernel repos & modules
+    - name: Clone remaining kernel repos & modules
+      run: |
         cd google-kernel
-        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/gs-google google-kernel/gs-google
-        git clone --depth=1 https://android.googlesource.com/kernel/build kernel/build
-        git clone --depth=1 https://android.googlesource.com/kernel/configs kernel/configs
-        git clone --depth=1 https://android.googlesource.com/platform/system/tools/mkbootimg mkbootimg
 
+        # Kernel GS spesifik
+        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/gs private/gs-google
+
+        # Build & configs
+        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/build kernel/build
+        git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/configs kernel/configs
+
+        # Mkbootimg
+        git clone --depth=1 https://android.googlesource.com/platform/system/tools/mkbootimg tools/mkbootimg
+
+        # Google modules
         MODULES=(aoc aoc-ipc display gpu gxp/gs201 edgetpu/abrolhos edgetpu/janeiro
                  power/reset amplifiers bluetooth/synaptics bluetooth/broadcom bluetooth/qcom
                  bms fingerprint/fpc fingerprint/goodix touch/himax_touch lwis misc
@@ -60,29 +81,34 @@ jobs:
                  touch/fts_touch touch/novatek_touch touch/sec_touch touch/synaptics_touch
                  uwb uwb-diags nfc wlan/bcmdhd/bcm4389 wlan/wlan_ptracker wlan/qcom/wcn6740/cnss2
                  wlan/qcom/wcn6740/wlan video/gchips)
+
         for mod in "${MODULES[@]}"; do
-          git clone --depth=1 https://android.googlesource.com/kernel/google-modules/$mod kernel/google-modules/$mod
+            git clone --depth=1 -b $KERNEL_BRANCH https://android.googlesource.com/kernel/google-modules/$mod kernel/google-modules/$mod \
+              || git clone --depth=1 https://android.googlesource.com/kernel/google-modules/$mod kernel/google-modules/$mod
         done
+
         cd ..
 
-    # 8️⃣ Setup Bazel & build kernel
-    - run: |
+    # 7️⃣ Setup Bazel & build kernel
+    - name: Setup Bazel & build kernel
+      run: |
         export PATH=$PWD/google-kernel/prebuilts/bazel/linux-x86_64:$PATH
-        cd google-kernel/gs-google
+        cd google-kernel/private/gs-google
         chmod +x build_cloudripper.sh
         ./build_cloudripper.sh
 
-    # 9️⃣ Collect artifacts
-    - run: |
+    # 8️⃣ Collect artifacts
+    - name: Collect Build Outputs
+      run: |
         mkdir -p artifacts
-        cp google-kernel/gs-google/out/arch/arm64/boot/Image.lz4 artifacts/ || true
-        cp google-kernel/gs-google/out/arch/arm64/boot/dts/google/*.dtb artifacts/ || true
-        cp google-kernel/gs-google/out/arch/arm64/boot/dts/google/*.dtbo artifacts/ || true
-        cp google-kernel/gs-google/out/boot.img artifacts/ || true
-        cp google-kernel/gs-google/out/System.map artifacts/ || true
-        cp google-kernel/gs-google/out/vmlinux artifacts/ || true
+        cp google-kernel/private/gs-google/out/arch/arm64/boot/Image.lz4 artifacts/ || true
+        cp google-kernel/private/gs-google/out/arch/arm64/boot/dts/google/*.dtb artifacts/ || true
+        cp google-kernel/private/gs-google/out/arch/arm64/boot/dts/google/*.dtbo artifacts/ || true
+        cp google-kernel/private/gs-google/out/boot.img artifacts/ || true
+        cp google-kernel/private/gs-google/out/System.map artifacts/ || true
+        cp google-kernel/private/gs-google/out/vmlinux artifacts/ || true
 
-    # 🔟 Upload artifacts
+    # 9️⃣ Upload artifacts
     - uses: actions/upload-artifact@v4
       with:
         name: gki-lindroid-build
