@@ -1,4 +1,4 @@
-name: Build Script
+name: Build Script2
 permissions:
   contents: write
   actions: write 
